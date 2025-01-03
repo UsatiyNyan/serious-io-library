@@ -4,12 +4,12 @@
 
 #include "sl/eq/async_connection.hpp"
 
-#include <sl/exec/st/future.hpp>
+#include <sl/meta/lifetime/defer.hpp>
 
 namespace sl::eq {
 
 void async_connection::handle_error() {
-    const auto socket_error = connection_.socket.get_opt(SOL_SOCKET, SO_ERROR);
+    const auto socket_error = connection.socket.get_opt(SOL_SOCKET, SO_ERROR);
     handle_error_impl(
         socket_error.has_value() //
             ? std::make_error_code(std::errc{ socket_error.value() })
@@ -19,26 +19,11 @@ void async_connection::handle_error() {
 
 void async_connection::handle_close() { handle_error_impl(std::make_error_code(std::errc::connection_reset)); }
 
-void async_connection::handle_error_impl(std::error_code ec) {
-    const auto error = tl::make_unexpected(ec);
-    if (read_state_.has_value()) {
-        auto& [buffer, promise] = read_state_.value();
-        std::move(promise).set_value(error);
-        read_state_.reset();
-    }
-    if (write_state_.has_value()) {
-        auto& [buffer, promise] = write_state_.value();
-        std::move(promise).set_value(error);
-        write_state_.reset();
-    }
-}
-
 void async_connection::handle_read() {
-    if (!read_state_.has_value()) {
+    if (!ASSUME_VAL(read_state_.has_value())) {
         return;
     }
-    auto& [buffer, promise] = read_state_.value();
-    auto read_result = connection_.socket.handle.read(buffer);
+    io::result<std::uint32_t> read_result = connection.socket.handle.read(read_state_->buffer);
     if (!read_result.has_value()) {
         const auto ec = read_result.error();
         if (ec == std::errc::resource_unavailable_try_again || ec == std::errc::operation_would_block) {
@@ -46,16 +31,15 @@ void async_connection::handle_read() {
             return;
         }
     }
-    std::move(promise).set_value(std::move(read_result));
-    read_state_.reset();
+    meta::defer cleanup{ [this] { read_state_.reset(); } };
+    read_state_->slot.set_value(std::move(read_result).value());
 }
 
 void async_connection::handle_write() {
-    if (!write_state_.has_value()) {
+    if (!ASSUME_VAL(write_state_.has_value())) {
         return;
     }
-    auto& [buffer, promise] = write_state_.value();
-    auto write_result = connection_.socket.handle.write(buffer);
+    io::result<std::uint32_t> write_result = connection.socket.handle.write(write_state_->buffer);
     if (!write_result.has_value()) {
         const auto ec = write_result.error();
         if (ec == std::errc::resource_unavailable_try_again || ec == std::errc::operation_would_block) {
@@ -63,24 +47,31 @@ void async_connection::handle_write() {
             return;
         }
     }
-    std::move(promise).set_value(std::move(write_result));
-    write_state_.reset();
+    meta::defer cleanup{ [this] { write_state_.reset(); } };
+    write_state_->slot.set_value(std::move(write_result).value());
 }
 
-async_connection::future_type async_connection::view::read(std::span<std::byte> buffer) {
-    auto [future, promise] = exec::st::make_contract<tl::expected<std::uint32_t, std::error_code>>();
-    ASSERT(!ref_.read_state_.has_value());
-    ref_.read_state_.emplace(buffer, std::move(promise));
-    ref_.handle_read();
-    return std::move(future);
+void async_connection::handle_error_impl(std::error_code ec) {
+    if (read_state_.has_value()) {
+        meta::defer cleanup{ [this] { read_state_.reset(); } };
+        read_state_->slot.set_error(std::error_code{ ec });
+    }
+    if (write_state_.has_value()) {
+        meta::defer cleanup{ [this] { write_state_.reset(); } };
+        write_state_->slot.set_error(std::error_code{ ec });
+    }
 }
 
-async_connection::future_type async_connection::view::write(std::span<const std::byte> buffer) {
-    auto [future, promise] = exec::st::make_contract<tl::expected<std::uint32_t, std::error_code>>();
-    ASSERT(!ref_.write_state_.has_value());
-    ref_.write_state_.emplace(buffer, std::move(promise));
-    ref_.handle_write();
-    return std::move(future);
+void async_connection::begin_read(std::span<std::byte> buffer, slot_type& slot) {
+    ASSERT(!read_state_.has_value());
+    read_state_.emplace(buffer, slot);
+    handle_read();
+}
+
+void async_connection::begin_write(std::span<const std::byte> buffer, slot_type& slot) {
+    ASSERT(!write_state_.has_value());
+    write_state_.emplace(buffer, slot);
+    handle_write();
 }
 
 } // namespace sl::eq
