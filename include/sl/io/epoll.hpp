@@ -5,12 +5,14 @@
 #pragma once
 
 #include "sl/io/file.hpp"
+#include "sl/io/result.hpp"
 
 #include <sl/meta/enum/flag.hpp>
-#include <tl/expected.hpp>
+#include <sl/meta/func/unit.hpp>
 
 #include <chrono>
 #include <span>
+
 #include <sys/epoll.h>
 
 namespace sl::io {
@@ -20,30 +22,30 @@ class epoll {
 
 public:
     enum class op : int {
-        ADD = EPOLL_CTL_ADD,
-        MOD = EPOLL_CTL_MOD,
-        DEL = EPOLL_CTL_DEL,
+        add = EPOLL_CTL_ADD,
+        mod = EPOLL_CTL_MOD,
+        del = EPOLL_CTL_DEL,
     };
 
     enum class event : std::uint32_t {
-        IN = EPOLLIN,
-        OUT = EPOLLOUT,
-        RDHUP = EPOLLRDHUP,
-        PRI = EPOLLPRI,
-        ERR = EPOLLERR,
-        HUP = EPOLLHUP,
-        ET = EPOLLET,
-        ONESHOT = EPOLLONESHOT,
-        WAKEUP = EPOLLWAKEUP,
-        EXCLUSIVE = EPOLLEXCLUSIVE,
+        in = EPOLLIN,
+        out = EPOLLOUT,
+        rdhup = EPOLLRDHUP,
+        pri = EPOLLPRI,
+        err = EPOLLERR,
+        hup = EPOLLHUP,
+        et = EPOLLET,
+        oneshot = EPOLLONESHOT,
+        wakeup = EPOLLWAKEUP,
+        exclusive = EPOLLEXCLUSIVE,
     };
     using event_flag = meta::enum_flag<event>;
 
-    [[nodiscard]] static tl::expected<epoll, std::error_code> create();
+    [[nodiscard]] static result<epoll> create();
 
-    [[nodiscard]] tl::expected<tl::monostate, std::error_code> ctl(op an_op, const file& a_file, epoll_event an_event);
-    [[nodiscard]] tl::expected<tl::monostate, std::error_code> ctl(op an_op, file::view a_file, epoll_event an_event);
-    [[nodiscard]] tl::expected<std::uint32_t, std::error_code>
+    [[nodiscard]] result<meta::unit> ctl(op an_op, const file& a_file, epoll_event an_event);
+    [[nodiscard]] result<meta::unit> ctl(op an_op, file::view a_file, epoll_event an_event);
+    [[nodiscard]] result<std::uint32_t>
         wait(std::span<epoll_event> out_events, tl::optional<std::chrono::milliseconds> maybe_timeout);
 
 private:
