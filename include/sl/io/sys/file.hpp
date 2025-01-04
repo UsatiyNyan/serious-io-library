@@ -17,7 +17,7 @@
 
 namespace sl::io {
 
-struct file : public meta::immovable {
+struct file : meta::immovable {
     struct view;
 
 public:

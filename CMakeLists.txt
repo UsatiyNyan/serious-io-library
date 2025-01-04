@@ -20,9 +20,9 @@ project(
         LANGUAGES CXX)
 
 add_library(${PROJECT_NAME} STATIC
-    src/io/file.cpp
-    src/io/epoll.cpp
-    src/io/socket.cpp
+    src/sys/file.cpp
+    src/sys/epoll.cpp
+    src/sys/socket.cpp
     src/eq/async_connection.cpp
     src/eq/epoll.cpp)
 

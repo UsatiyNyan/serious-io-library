@@ -4,6 +4,5 @@
 
 #pragma once
 
-#include "sl/io/epoll.hpp"
-#include "sl/io/file.hpp"
-#include "sl/io/socket.hpp"
+#include "sl/io/result.hpp"
+#include "sl/io/sys.hpp"
