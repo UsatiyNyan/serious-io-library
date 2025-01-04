@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "sl/io/socket.hpp"
+#include "sl/io/sys/socket.hpp"
 
 #include <sl/exec/algo/sched/inline.hpp>
 #include <sl/exec/model.hpp>
@@ -12,7 +12,7 @@
 #include <sl/meta/monad/maybe.hpp>
 #include <sl/meta/monad/result.hpp>
 
-namespace sl::eq {
+namespace sl::io {
 
 struct async_connection {
     struct read_connection;
@@ -33,7 +33,7 @@ private:
     };
 
 public:
-    explicit async_connection(io::socket::connection connection) : connection{ std::move(connection) } {}
+    explicit async_connection(socket::connection connection) : connection{ std::move(connection) } {}
 
     void handle_error();
     void handle_close();
@@ -46,7 +46,7 @@ private:
     void begin_write(std::span<const std::byte> buffer, slot_type& slot);
 
 public:
-    io::socket::connection connection;
+    socket::connection connection;
 
 private:
     meta::maybe<read_state> read_state_{};
@@ -98,4 +98,4 @@ struct [[nodiscard]] async_connection::view {
     exec::Signal auto write(std::span<const std::byte> buffer) { return write_signal{ buffer, self }; }
 };
 
-} // namespace sl::eq
+} // namespace sl::io

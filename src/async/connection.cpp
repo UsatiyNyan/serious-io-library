@@ -2,11 +2,11 @@
 // Created by usatiynyan.
 //
 
-#include "sl/eq/async_connection.hpp"
+#include "sl/io/async/connection.hpp"
 
 #include <sl/meta/lifetime/defer.hpp>
 
-namespace sl::eq {
+namespace sl::io {
 
 void async_connection::handle_error() {
     const auto socket_error = connection.socket.get_opt(SOL_SOCKET, SO_ERROR);
@@ -23,7 +23,7 @@ void async_connection::handle_read() {
     if (!ASSUME_VAL(read_state_.has_value())) {
         return;
     }
-    io::result<std::uint32_t> read_result = connection.socket.handle.read(read_state_->buffer);
+    result<std::uint32_t> read_result = connection.socket.handle.read(read_state_->buffer);
     if (!read_result.has_value()) {
         const auto ec = read_result.error();
         if (ec == std::errc::resource_unavailable_try_again || ec == std::errc::operation_would_block) {
@@ -39,7 +39,7 @@ void async_connection::handle_write() {
     if (!ASSUME_VAL(write_state_.has_value())) {
         return;
     }
-    io::result<std::uint32_t> write_result = connection.socket.handle.write(write_state_->buffer);
+    result<std::uint32_t> write_result = connection.socket.handle.write(write_state_->buffer);
     if (!write_result.has_value()) {
         const auto ec = write_result.error();
         if (ec == std::errc::resource_unavailable_try_again || ec == std::errc::operation_would_block) {
@@ -74,4 +74,4 @@ void async_connection::begin_write(std::span<const std::byte> buffer, slot_type&
     handle_write();
 }
 
-} // namespace sl::eq
+} // namespace sl::io

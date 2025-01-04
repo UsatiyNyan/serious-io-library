@@ -23,8 +23,8 @@ add_library(${PROJECT_NAME} STATIC
     src/sys/file.cpp
     src/sys/epoll.cpp
     src/sys/socket.cpp
-    src/eq/async_connection.cpp
-    src/eq/epoll.cpp)
+    src/async/connection.cpp
+    src/async/epoll.cpp)
 
 add_library(sl::io ALIAS ${PROJECT_NAME})
 
