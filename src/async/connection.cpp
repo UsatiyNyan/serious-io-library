@@ -4,8 +4,6 @@
 
 #include "sl/io/async/connection.hpp"
 
-#include <sl/meta/lifetime/defer.hpp>
-
 namespace sl::io {
 
 void async_connection::handle_error() {
@@ -31,8 +29,8 @@ void async_connection::handle_read() {
             return;
         }
     }
-    meta::defer cleanup{ [this] { read_state_.reset(); } };
-    read_state_->slot.set_value(std::move(read_result).value());
+    slot_type& slot = std::exchange(read_state_, tl::nullopt)->slot;
+    slot.set_value(std::move(read_result).value());
 }
 
 void async_connection::handle_write() {
@@ -47,30 +45,30 @@ void async_connection::handle_write() {
             return;
         }
     }
-    meta::defer cleanup{ [this] { write_state_.reset(); } };
-    write_state_->slot.set_value(std::move(write_result).value());
+    slot_type& slot = std::exchange(write_state_, tl::nullopt)->slot;
+    slot.set_value(std::move(write_result).value());
 }
 
 void async_connection::handle_error_impl(std::error_code ec) {
     if (read_state_.has_value()) {
-        meta::defer cleanup{ [this] { read_state_.reset(); } };
-        read_state_->slot.set_error(std::error_code{ ec });
+        slot_type& slot = std::exchange(read_state_, tl::nullopt)->slot;
+        slot.set_error(std::error_code{ ec });
     }
     if (write_state_.has_value()) {
-        meta::defer cleanup{ [this] { write_state_.reset(); } };
-        write_state_->slot.set_error(std::error_code{ ec });
+        slot_type& slot = std::exchange(write_state_, tl::nullopt)->slot;
+        slot.set_error(std::error_code{ ec });
     }
 }
 
 void async_connection::begin_read(std::span<std::byte> buffer, slot_type& slot) {
     ASSERT(!read_state_.has_value());
-    read_state_.emplace(buffer, slot);
+    read_state_.emplace(read_state{ buffer, slot });
     handle_read();
 }
 
 void async_connection::begin_write(std::span<const std::byte> buffer, slot_type& slot) {
     ASSERT(!write_state_.has_value());
-    write_state_.emplace(buffer, slot);
+    write_state_.emplace(write_state{ buffer, slot });
     handle_write();
 }
 

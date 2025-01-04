@@ -4,32 +4,32 @@
 
 #pragma once
 
-#include "sl/eq/async_connection.hpp"
-#include "sl/io/epoll.hpp"
-#include "sl/io/socket.hpp"
+#include "sl/io/async/connection.hpp"
 
-#include <sl/exec/generic/async.hpp>
-#include <sl/exec/generic/executor.hpp>
+#include "sl/io/sys/epoll.hpp"
+#include "sl/io/sys/socket.hpp"
+
+#include <sl/exec/coro/async.hpp>
 
 #include <function2/function2.hpp>
 
-namespace sl::eq {
+namespace sl::io {
 
-using make_client_coro_type = fu2::function_base<
+using make_client_coro = fu2::function_base<
     /*IsOwning=*/true,
     /*IsCopyable=*/false,
     /*Capacity=*/fu2::capacity_default,
     /*IsThrowing=*/false,
     /*HasStrongExceptGuarantee=*/true,
-    exec::async<void>(async_connection::view async_connection_view)>;
+    exec::async<void>(async_connection::view)>;
 
 void setup_server_handler(
-    io::epoll& epoll,
-    io::socket::server& server,
-    exec::generic_executor& executor,
-    make_client_coro_type make_client_coro
+    epoll& epoll,
+    socket::server& server,
+    exec::executor& executor,
+    make_client_coro make_client_coro
 );
 
 void execute_events(std::span<const epoll_event> events);
 
-} // namespace sl::eq
+} // namespace sl::io
