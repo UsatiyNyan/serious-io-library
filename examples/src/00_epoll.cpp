@@ -12,7 +12,6 @@
 namespace sl {
 
 void main(std::uint16_t port, std::uint16_t max_clients) {
-    exec::manual_executor executor;
     auto epoll = *ASSERT_VAL(io::epoll::create());
 
     io::socket::server server =
@@ -28,7 +27,9 @@ void main(std::uint16_t port, std::uint16_t max_clients) {
             .map_error([](std::error_code ec) { PANIC(ec); })
             .value();
 
-    io::setup_server_handler(epoll, server, executor, [](io::async_connection::view conn) -> exec::async<void> {
+    io::async_epoll async_epoll{ epoll, server };
+
+    constexpr auto client_handle_coro = [](io::async_connection::view conn) -> exec::async<void> {
         using exec::operator co_await;
 
         std::cout << "start client\n";
@@ -49,12 +50,23 @@ void main(std::uint16_t port, std::uint16_t max_clients) {
             std::cout << "read: " << *read_result << " written: " << *write_result << "\n";
         }
         std::cout << "end client\n";
-    });
+    };
+
+    exec::manual_executor executor;
+    exec::coro_schedule(executor, [&async_epoll, &executor, client_handle_coro] -> exec::async<void> {
+        const auto ec = co_await async_epoll.serve_coro(
+            [] { return true; },
+            [&executor, client_handle_coro](io::async_connection::view conn) {
+                exec::coro_schedule(executor, client_handle_coro(std::move(conn)));
+            }
+        );
+        ASSERT(!ec);
+    }());
+
+    executor.execute_batch();
 
     std::array<::epoll_event, 1024> events{};
-    while (const auto wait_result = epoll.wait(events, tl::nullopt)) {
-        const std::uint32_t nevents = wait_result.value();
-        io::execute_events(std::span{ events.data(), nevents });
+    while (async_epoll.wait_and_fulfill(events, tl::nullopt)) {
         while (executor.execute_batch() > 0) {
             std::cout << "spin\n";
         }

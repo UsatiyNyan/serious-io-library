@@ -18,7 +18,7 @@ void async_connection::handle_error() {
 void async_connection::handle_close() { handle_error_impl(std::make_error_code(std::errc::connection_reset)); }
 
 void async_connection::handle_read() {
-    if (!ASSUME_VAL(read_state_.has_value())) {
+    if (!read_state_.has_value()) {
         return;
     }
     result<std::uint32_t> read_result = connection.socket.handle.read(read_state_->buffer);
@@ -34,7 +34,7 @@ void async_connection::handle_read() {
 }
 
 void async_connection::handle_write() {
-    if (!ASSUME_VAL(write_state_.has_value())) {
+    if (!write_state_.has_value()) {
         return;
     }
     result<std::uint32_t> write_result = connection.socket.handle.write(write_state_->buffer);

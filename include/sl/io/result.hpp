@@ -9,6 +9,6 @@
 namespace sl::io {
 
 template <typename T>
-using result = sl::meta::result<T, std::error_code>;
+using result = meta::result<T, std::error_code>;
 
 } // namespace sl::io
