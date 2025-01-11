@@ -11,7 +11,7 @@
 
 #include <function2/function2.hpp>
 #include <sl/exec/algo/sched/inline.hpp>
-#include <sl/exec/coro/async.hpp>
+#include <sl/exec/coro/async_gen.hpp>
 #include <sl/exec/coro/await.hpp>
 #include <sl/meta/lifetime/immovable.hpp>
 
@@ -129,9 +129,8 @@ public:
 
     exec::Signal auto accept() & { return accept_signal{ *this }; }
 
-    exec::async<std::error_code> serve_coro(
+    exec::async_gen<async_connection::view, std::error_code> serve_coro(
         handler_type<bool()> check_running,
-        handler_type<void(async_connection::view)> handle_client,
         handler_type<client_slot&(epoll&, socket::connection&&)> alloc_client = {}
     ) {
         using exec::operator co_await;
@@ -142,14 +141,13 @@ public:
         }
 
         while (check_running()) {
-            // I LIKE THIS:
             auto maybe_events = co_await accept();
             if (!maybe_events.has_value()) {
                 co_return std::move(maybe_events).error();
             }
 
             const auto events = std::move(maybe_events).value();
-            ASSERT(events & epoll::event_flag{ epoll::event::in });
+            DEBUG_ASSERT(events & epoll::event_flag{ epoll::event::in });
 
             while (check_running()) {
                 auto accept_result = server_.accept();
@@ -164,10 +162,8 @@ public:
 
                 auto connection = std::move(accept_result).value();
                 connection.socket.set_blocking(is_blocking_).map_error([](std::error_code ec) { PANIC(ec); });
-
-                // I DON'T LIKE THIS: not slot mayhaps and instead a signal+connection?
                 auto& client_slot = alloc_client(epoll_, std::move(connection));
-                handle_client(async_connection::view{ client_slot.async_connection });
+                co_yield async_connection::view{ client_slot.async_connection };
             }
         }
         co_return std::error_code{};
