@@ -58,7 +58,7 @@ struct [[nodiscard]] async_connection::read_connection {
     slot_type& slot;
     async_connection& self;
 
-    void emit() & noexcept { self.begin_read(buffer, slot); }
+    void emit() && noexcept { self.begin_read(buffer, slot); }
 };
 
 struct [[nodiscard]] async_connection::write_connection {
@@ -66,7 +66,7 @@ struct [[nodiscard]] async_connection::write_connection {
     slot_type& slot;
     async_connection& self;
 
-    void emit() & noexcept { self.begin_write(buffer, slot); }
+    void emit() && noexcept { self.begin_write(buffer, slot); }
 };
 
 struct [[nodiscard]] async_connection::read_signal {

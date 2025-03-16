@@ -92,7 +92,7 @@ struct async_epoll : meta::immovable {
                     .map_error([](std::error_code ec) { PANIC(ec); });
             }
         }
-        void emit() & {
+        void emit() && {
             self_.epoll_
                 .ctl(
                     epoll::op::add,
