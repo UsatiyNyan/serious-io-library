@@ -33,7 +33,7 @@ void main(std::uint16_t port, std::uint16_t max_clients, std::uint32_t tcount) {
         while (true) {
             std::array<std::byte, 1024> buffer{};
 
-            const auto read_result = co_await (conn.read(buffer) | exec::on(executor));
+            const auto read_result = co_await (conn.read(buffer) | exec::continue_on(executor));
             if (!read_result.has_value() || *read_result == 0) {
                 break;
             }
@@ -41,7 +41,7 @@ void main(std::uint16_t port, std::uint16_t max_clients, std::uint32_t tcount) {
             std::printf("read %u bytes on thread=%zu: {%s}\n", *read_result, get_thread_id(), read_str.data());
 
             const auto write_result =
-                co_await (conn.write(std::span{ buffer.data(), *read_result }) | exec::on(executor));
+                co_await (conn.write(std::span{ buffer.data(), *read_result }) | exec::continue_on(executor));
             if (!write_result.has_value() || *write_result == 0) {
                 break;
             }
