@@ -6,45 +6,31 @@
 
 #include "sl/io/result.hpp"
 
-#include <sl/meta/lifetime/immovable.hpp>
-
-#include <tl/optional.hpp>
+#include <sl/meta/traits/unique.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
-#include <utility>
 
-namespace sl::io {
+namespace sl::io::sys {
 
 struct file : meta::immovable {
-    struct view;
-
-public:
-    explicit file(int fd) : fd_{ tl::in_place, fd } {}
+    explicit file(int fd) : fd_{ std::in_place, fd } {}
     file(file&& other) : fd_{ std::move(other).release() } {}
     ~file() noexcept;
 
     [[nodiscard]] int internal() const;
     [[nodiscard]] int release() &&;
 
-    [[nodiscard]] result<std::uint32_t> read(std::span<std::byte> buffer);
-    [[nodiscard]] result<std::uint32_t> write(std::span<const std::byte> buffer);
+    [[nodiscard]] result<std::uint32_t> read(std::span<std::byte> buffer) &;
+    [[nodiscard]] result<std::uint32_t> write(std::span<const std::byte> buffer) &;
 
-    [[nodiscard]] result<std::int32_t> fcntl(std::int32_t op, std::int32_t arg);
-
-private:
-    tl::optional<int> fd_{};
-};
-
-struct file::view {
-    explicit view(int fd) : fd_{ fd } {}
-    explicit view(const file& a_file) : fd_{ a_file.internal() } {}
-
-    [[nodiscard]] int internal() const { return fd_; }
+    [[nodiscard]] result<std::int32_t> fcntl(std::int32_t op, std::int32_t arg) &;
+    [[nodiscard]] result<std::int32_t> fcntl(std::int32_t op) const&;
 
 private:
-    int fd_;
+    std::optional<int> fd_;
 };
 
-} // namespace sl::io
+} // namespace sl::io::sys

@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-namespace sl::io {
+namespace sl::io::sys {
 
 TEST(sysEpoll, flags) {
     {
