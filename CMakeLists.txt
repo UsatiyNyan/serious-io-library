@@ -25,6 +25,8 @@ add_library(${PROJECT_NAME} STATIC
     src/sys/socket.cpp
     src/state/socket.cpp
     src/state/server.cpp
+    src/async/socket.cpp
+    src/async/server.cpp
 )
 
 add_library(sl::io ALIAS ${PROJECT_NAME})
