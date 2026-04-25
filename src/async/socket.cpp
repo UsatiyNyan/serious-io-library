@@ -5,26 +5,9 @@
 #include "sl/io/async/socket.hpp"
 
 #include <sl/exec/model/syntax.hpp>
-
-#include <libassert/assert.hpp>
+#include <sl/meta/assert.hpp>
 
 namespace sl::io::async {
-
-void socket::read_connection::emit() && {
-    state_.begin_read(buffer_, [&slot = slot_](result<value_type> a_result) {
-        exec::fulfill_slot(slot, meta::maybe{ a_result });
-    });
-}
-
-bool socket::read_connection::try_cancel() & { return state_.cancel_read(); }
-
-void socket::write_connection::emit() && {
-    state_.begin_write(buffer_, [&slot = slot_](result<value_type> a_result) {
-        exec::fulfill_slot(slot, meta::maybe{ a_result });
-    });
-}
-
-bool socket::write_connection::try_cancel() & { return state_.cancel_write(); }
 
 socket::bound::~bound() { ASSERT(is_unbound_); }
 
@@ -49,7 +32,7 @@ socket::socket(state::socket& a_socket)
           } else if (events & sys::epoll::event::out) {
               state_.resume_write();
           } else {
-              UNREACHABLE(events);
+              std::unreachable();
           }
       } } {}
 

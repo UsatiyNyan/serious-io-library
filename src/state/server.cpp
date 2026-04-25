@@ -4,36 +4,31 @@
 
 #include "sl/io/state/server.hpp"
 
-#include <libassert/assert.hpp>
+#include <sl/meta/assert.hpp>
 
 namespace sl::io::state {
 
-void server::begin_accept(callback cb) & {
-    DEBUG_ASSERT(!callback_);
-    callback_ = std::move(cb);
+void server::begin_accept(callback& cb) & {
+    DEBUG_ASSERT(!cb_.has_value());
+    cb_ = cb;
     resume_accept();
 }
 
 void server::resume_accept() & {
-    if (!DEBUG_ASSERT_VAL(callback_)) {
+    if (!cb_.has_value()) {
         return;
     }
-
     auto accept_result = sys_.accept();
-    if (!accept_result.has_value()) {
-        if (const auto ec = std::move(accept_result).error();
-            ec == std::errc::resource_unavailable_try_again || ec == std::errc::operation_would_block) {
-            // re-schedule
-            return;
-        }
+    if (check_reschedule(accept_result)) {
+        return;
     }
-
-    std::exchange(callback_, callback{})(std::move(accept_result));
+    auto& cb = std::exchange(cb_, meta::null).value();
+    std::move(cb).set_result(std::move(accept_result));
 }
 
-bool server::cancel_accept() & {
-    const auto prev_callback = std::exchange(callback_, callback{});
-    return !prev_callback.empty();
+void server::cancel_accept() & {
+    std::exchange(cb_, meta::null) //
+        .map([this](callback& cb) { std::move(cb).set_result(meta::null); });
 }
 
 } // namespace sl::io::state

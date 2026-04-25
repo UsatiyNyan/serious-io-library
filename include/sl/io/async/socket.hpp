@@ -7,52 +7,61 @@
 #include "sl/io/state/socket.hpp"
 #include "sl/io/sys/epoll.hpp"
 
-#include <sl/exec/algo/sched/inline.hpp>
 #include <sl/exec/model/concept.hpp>
+#include <sl/exec/model/connection.hpp>
 #include <sl/meta/traits/unique.hpp>
 
 namespace sl::io::async {
 
 struct socket : meta::immovable {
-    struct read_connection : exec::cancel_mixin {
-        using value_type = std::uint32_t;
-        using error_type = std::error_code;
+    using V = std::uint32_t;
+    using E = std::error_code;
 
-    public:
+    template <exec::SlotCtor<V, E> SlotCtorT>
+    struct [[nodiscard]] read_connection final : state::socket::callback {
         read_connection(
             state::socket& a_state,
             sys::epoll& an_epoll,
             std::span<std::byte> buffer,
-            exec::slot<value_type, error_type>& slot
+            SlotCtorT&& slot_ctor
         )
-            : buffer_{ buffer }, slot_{ slot }, state_{ a_state }, epoll_{ an_epoll } {}
+            : slot_{ std::move(slot_ctor)() }, buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
 
         // Connection
-        exec::cancel_mixin& get_cancel_handle() & { return *this; }
-        void emit() &&;
+        exec::CancelHandle auto emit() && noexcept {
+            state_.begin_read(buffer_, *this);
+            return exec::proxy_cancel_handle{ this };
+        }
 
-        // cancel_mixin
-        bool try_cancel() & override;
+        // CancelHandle
+        constexpr void try_cancel() && noexcept { state_.cancel_read(); }
+
+        // slot_callback
+        void set_result(meta::maybe<meta::result<V, E>>&& maybe_result) && noexcept override {
+            exec::fulfill_slot(std::move(slot_), std::move(maybe_result));
+        }
 
     private:
+        exec::SlotFrom<SlotCtorT> slot_;
         std::span<std::byte> buffer_;
-        exec::slot<value_type, error_type>& slot_;
         state::socket& state_;
         sys::epoll& epoll_;
     };
 
-    struct [[nodiscard]] read_signal {
-        using value_type = std::uint32_t;
-        using error_type = std::error_code;
+    struct [[nodiscard]] read_signal final {
+        using value_type = V;
+        using error_type = E;
 
     public:
         read_signal(state::socket& a_state, sys::epoll& an_epoll, std::span<std::byte> buffer)
             : buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
 
-        exec::executor& get_executor() & { return exec::inline_executor(); }
-        exec::Connection auto subscribe(exec::slot<value_type, error_type>& slot) {
-            return read_connection{ state_, epoll_, buffer_, slot };
+        template <exec::SlotCtor<V, E> SlotCtorT>
+        constexpr exec::Connection auto subscribe(SlotCtorT&& slot_ctor) && noexcept {
+            return read_connection{ state_, epoll_, buffer_, std::move(slot_ctor) };
         }
+
+        static exec::executor& get_executor() noexcept { return exec::inline_executor(); }
 
     private:
         std::span<std::byte> buffer_;
@@ -60,45 +69,51 @@ struct socket : meta::immovable {
         sys::epoll& epoll_;
     };
 
-    struct write_connection : exec::cancel_mixin {
-        using value_type = std::uint32_t;
-        using error_type = std::error_code;
-
-    public:
+    template <exec::SlotCtor<V, E> SlotCtorT>
+    struct [[nodiscard]] write_connection final : state::socket::callback {
         write_connection(
             state::socket& a_state,
             sys::epoll& an_epoll,
             std::span<const std::byte> buffer,
-            exec::slot<value_type, error_type>& slot
+            SlotCtorT&& slot_ctor
         )
-            : buffer_{ buffer }, slot_{ slot }, state_{ a_state }, epoll_{ an_epoll } {}
+            : slot_{ std::move(slot_ctor)() }, buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
 
         // Connection
-        exec::cancel_mixin& get_cancel_handle() & { return *this; }
-        void emit() &&;
+        exec::CancelHandle auto emit() && noexcept {
+            state_.begin_write(buffer_, *this);
+            return exec::proxy_cancel_handle{ this };
+        }
 
-        // cancel_mixin
-        bool try_cancel() & override;
+        // CancelHandle
+        constexpr void try_cancel() && noexcept { state_.cancel_write(); }
+
+        // slot_callback
+        void set_result(meta::maybe<meta::result<V, E>>&& maybe_result) && noexcept override {
+            exec::fulfill_slot(std::move(slot_), std::move(maybe_result));
+        }
 
     private:
+        exec::SlotFrom<SlotCtorT> slot_;
         std::span<const std::byte> buffer_;
-        exec::slot<value_type, error_type>& slot_;
         state::socket& state_;
         sys::epoll& epoll_;
     };
 
     struct [[nodiscard]] write_signal {
-        using value_type = std::uint32_t;
-        using error_type = std::error_code;
+        using value_type = V;
+        using error_type = E;
 
     public:
         write_signal(state::socket& a_state, sys::epoll& an_epoll, std::span<const std::byte> buffer)
             : buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
 
-        exec::executor& get_executor() & { return exec::inline_executor(); }
-        exec::Connection auto subscribe(exec::slot<value_type, error_type>& slot) {
-            return write_connection{ state_, epoll_, buffer_, slot };
+        template <exec::SlotCtor<V, E> SlotCtorT>
+        constexpr exec::Connection auto subscribe(SlotCtorT&& slot_ctor) && noexcept {
+            return write_connection{ state_, epoll_, buffer_, std::move(slot_ctor) };
         }
+
+        static exec::executor& get_executor() noexcept { return exec::inline_executor(); }
 
     private:
         std::span<const std::byte> buffer_;
@@ -116,10 +131,8 @@ struct socket : meta::immovable {
         ~bound();
 
     public:
-        exec::Signal<std::uint32_t, std::error_code> auto read(std::span<std::byte> buffer) & {
-            return read_signal{ state_, epoll_, buffer };
-        }
-        exec::Signal<std::uint32_t, std::error_code> auto write(std::span<const std::byte> buffer) & {
+        exec::Signal<V, E> auto read(std::span<std::byte> buffer) & { return read_signal{ state_, epoll_, buffer }; }
+        exec::Signal<V, E> auto write(std::span<const std::byte> buffer) & {
             return write_signal{ state_, epoll_, buffer };
         }
 

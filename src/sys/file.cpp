@@ -4,7 +4,7 @@
 
 #include "sl/io/sys/file.hpp"
 
-#include <libassert/assert.hpp>
+#include <sl/meta/assert.hpp>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -17,7 +17,7 @@ file::~file() noexcept {
     }
     const int fd = fd_.value();
     const int result = ::close(fd);
-    ASSERT(result == 0, meta::errno_code());
+    ASSERT(result == 0, "", meta::errno_code());
 }
 
 int file::internal() const {

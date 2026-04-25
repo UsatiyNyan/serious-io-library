@@ -5,18 +5,10 @@
 #include "sl/io/async/server.hpp"
 
 #include <sl/exec/model/syntax.hpp>
-
-#include <libassert/assert.hpp>
+#include <sl/meta/assert.hpp>
+#include <utility>
 
 namespace sl::io::async {
-
-void server::accept_connection::emit() && {
-    state_.begin_accept([&slot = slot_](result<value_type> a_result) {
-        exec::fulfill_slot(slot, meta::maybe{ std::move(a_result) });
-    });
-}
-
-bool server::accept_connection::try_cancel() & { return state_.cancel_accept(); }
 
 server::bound::~bound() { ASSERT(is_unbound_); }
 
@@ -35,7 +27,7 @@ server::server(state::server& a_server)
           if (events & sys::epoll::event::in) {
               state_.resume_accept();
           } else {
-              UNREACHABLE(events);
+              std::unreachable();
           }
       } } {}
 

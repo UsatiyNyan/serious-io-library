@@ -6,6 +6,7 @@
 
 #include "sl/io/sys/socket.hpp"
 
+#include <sl/exec/model/slot.hpp>
 #include <sl/meta/func/function.hpp>
 #include <sl/meta/monad/maybe.hpp>
 #include <sl/meta/traits/unique.hpp>
@@ -13,7 +14,7 @@
 namespace sl::io::state {
 
 struct server {
-    using callback = meta::unique_function<void(result<std::pair<sys::socket, sys::address>>)>;
+    using callback = exec::slot_callback<std::pair<sys::socket, sys::address>, std::error_code>;
 
 public:
     explicit server(sys::listening_server& a_server) : sys_{ a_server } {}
@@ -21,12 +22,12 @@ public:
     const sys::listening_server& sys() const& { return sys_; }
     sys::listening_server& sys() & { return sys_; }
 
-    void begin_accept(callback cb) &;
+    void begin_accept(callback& cb) &;
     void resume_accept() &;
-    bool cancel_accept() &;
+    void cancel_accept() &;
 
 private:
-    callback callback_{};
+    meta::maybe<callback&> cb_{};
     sys::listening_server& sys_;
 };
 

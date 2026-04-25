@@ -6,7 +6,8 @@
 #include <sl/io.hpp>
 
 #include <fmt/core.h>
-#include <libassert/assert.hpp>
+#include <fmt/printf.h>
+#include <sl/meta/assert.hpp>
 
 namespace sl {
 
@@ -20,8 +21,8 @@ exec::async<void> client_coro(
 
     auto& [socket, address] = accepted;
     io::state::socket socket_state{ socket };
-    auto socket_async = *ASSERT_VAL(io::async::socket::create(socket_state));
-    auto bound_socket_async = *ASSERT_VAL(socket_async->bind(epoll));
+    auto socket_async = *io::async::socket::create(socket_state);
+    auto bound_socket_async = *socket_async->bind(epoll);
     meta::defer unbind_socket{ [&bound_socket_async] { ASSERT(std::move(bound_socket_async).unbind()); } };
 
     auto& client = bound_socket_async;

@@ -14,7 +14,7 @@ sl_project_prologue(
 
 project(
         serious-io-library
-        VERSION 0.0.1
+        VERSION 1.0.0
         DESCRIPTION "async sockets, epoll exclusively for linux for now"
         HOMEPAGE_URL "TODO"
         LANGUAGES CXX)
