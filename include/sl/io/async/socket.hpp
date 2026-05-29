@@ -19,22 +19,11 @@ struct socket : meta::immovable {
 
     template <exec::SlotCtor<V, E> SlotCtorT>
     struct [[nodiscard]] read_connection final : state::socket::callback {
-        read_connection(
-            state::socket& a_state,
-            sys::epoll& an_epoll,
-            std::span<std::byte> buffer,
-            SlotCtorT&& slot_ctor
-        )
-            : slot_{ std::move(slot_ctor)() }, buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
+        read_connection(state::socket& a_state, std::span<std::byte> buffer, SlotCtorT&& slot_ctor)
+            : slot_{ std::move(slot_ctor)() }, buffer_{ buffer }, state_{ a_state } {}
 
         // Connection
-        exec::CancelHandle auto emit() && noexcept {
-            state_.begin_read(buffer_, *this);
-            return exec::proxy_cancel_handle{ this };
-        }
-
-        // CancelHandle
-        constexpr void try_cancel() && noexcept { state_.cancel_read(); }
+        exec::CancelHandle auto emit() && noexcept { return state_.begin_read(buffer_, *this); }
 
         // slot_callback
         void set_result(meta::maybe<meta::result<V, E>>&& maybe_result) && noexcept override {
@@ -45,7 +34,6 @@ struct socket : meta::immovable {
         exec::SlotFrom<SlotCtorT> slot_;
         std::span<std::byte> buffer_;
         state::socket& state_;
-        sys::epoll& epoll_;
     };
 
     struct [[nodiscard]] read_signal final {
@@ -53,12 +41,11 @@ struct socket : meta::immovable {
         using error_type = E;
 
     public:
-        read_signal(state::socket& a_state, sys::epoll& an_epoll, std::span<std::byte> buffer)
-            : buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
+        read_signal(state::socket& a_state, std::span<std::byte> buffer) : buffer_{ buffer }, state_{ a_state } {}
 
         template <exec::SlotCtor<V, E> SlotCtorT>
         constexpr exec::Connection auto subscribe(SlotCtorT&& slot_ctor) && noexcept {
-            return read_connection{ state_, epoll_, buffer_, std::move(slot_ctor) };
+            return read_connection{ state_, buffer_, std::move(slot_ctor) };
         }
 
         static exec::executor& get_executor() noexcept { return exec::inline_executor(); }
@@ -66,27 +53,15 @@ struct socket : meta::immovable {
     private:
         std::span<std::byte> buffer_;
         state::socket& state_;
-        sys::epoll& epoll_;
     };
 
     template <exec::SlotCtor<V, E> SlotCtorT>
     struct [[nodiscard]] write_connection final : state::socket::callback {
-        write_connection(
-            state::socket& a_state,
-            sys::epoll& an_epoll,
-            std::span<const std::byte> buffer,
-            SlotCtorT&& slot_ctor
-        )
-            : slot_{ std::move(slot_ctor)() }, buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
+        write_connection(state::socket& a_state, std::span<const std::byte> buffer, SlotCtorT&& slot_ctor)
+            : slot_{ std::move(slot_ctor)() }, buffer_{ buffer }, state_{ a_state } {}
 
         // Connection
-        exec::CancelHandle auto emit() && noexcept {
-            state_.begin_write(buffer_, *this);
-            return exec::proxy_cancel_handle{ this };
-        }
-
-        // CancelHandle
-        constexpr void try_cancel() && noexcept { state_.cancel_write(); }
+        exec::CancelHandle auto emit() && noexcept { return state_.begin_write(buffer_, *this); }
 
         // slot_callback
         void set_result(meta::maybe<meta::result<V, E>>&& maybe_result) && noexcept override {
@@ -97,7 +72,6 @@ struct socket : meta::immovable {
         exec::SlotFrom<SlotCtorT> slot_;
         std::span<const std::byte> buffer_;
         state::socket& state_;
-        sys::epoll& epoll_;
     };
 
     struct [[nodiscard]] write_signal {
@@ -105,12 +79,12 @@ struct socket : meta::immovable {
         using error_type = E;
 
     public:
-        write_signal(state::socket& a_state, sys::epoll& an_epoll, std::span<const std::byte> buffer)
-            : buffer_{ buffer }, state_{ a_state }, epoll_{ an_epoll } {}
+        write_signal(state::socket& a_state, std::span<const std::byte> buffer)
+            : buffer_{ buffer }, state_{ a_state } {}
 
         template <exec::SlotCtor<V, E> SlotCtorT>
         constexpr exec::Connection auto subscribe(SlotCtorT&& slot_ctor) && noexcept {
-            return write_connection{ state_, epoll_, buffer_, std::move(slot_ctor) };
+            return write_connection{ state_, buffer_, std::move(slot_ctor) };
         }
 
         static exec::executor& get_executor() noexcept { return exec::inline_executor(); }
@@ -118,7 +92,6 @@ struct socket : meta::immovable {
     private:
         std::span<const std::byte> buffer_;
         state::socket& state_;
-        sys::epoll& epoll_;
     };
 
     struct [[nodiscard]] bound : meta::immovable {
@@ -131,10 +104,8 @@ struct socket : meta::immovable {
         ~bound();
 
     public:
-        exec::Signal<V, E> auto read(std::span<std::byte> buffer) & { return read_signal{ state_, epoll_, buffer }; }
-        exec::Signal<V, E> auto write(std::span<const std::byte> buffer) & {
-            return write_signal{ state_, epoll_, buffer };
-        }
+        exec::Signal<V, E> auto read(std::span<std::byte> buffer) & { return read_signal{ state_, buffer }; }
+        exec::Signal<V, E> auto write(std::span<const std::byte> buffer) & { return write_signal{ state_, buffer }; }
 
         // expected to always be called in the end
         result<meta::unit> unbind() &&;

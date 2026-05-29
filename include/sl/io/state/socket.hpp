@@ -24,30 +24,49 @@ struct socket {
         callback* cb;
     };
 
+    struct read_cancel_handle {
+        // CancelHandle
+        constexpr void try_cancel() && noexcept { self.cancel_read(id); }
+
+    public:
+        socket& self;
+        std::size_t id = 0;
+    };
+
+    struct write_cancel_handle {
+        // CancelHandle
+        constexpr void try_cancel() && noexcept { self.cancel_write(id); }
+
+    public:
+        socket& self;
+        std::size_t id = 0;
+    };
+
 public:
     explicit socket(sys::socket& a_socket) : sys_{ a_socket } {}
 
     const sys::socket& sys() const& { return sys_; }
     sys::socket& sys() & { return sys_; }
 
-    void begin_read(std::span<std::byte> buf, callback& cb) &;
-    void begin_write(std::span<const std::byte> buf, callback& cb) &;
+    read_cancel_handle begin_read(std::span<std::byte> buf, callback& cb) &;
+    write_cancel_handle begin_write(std::span<const std::byte> buf, callback& cb) &;
 
     void resume_read() &;
     void resume_write() &;
-
-    void cancel_read() &;
-    void cancel_write() &;
 
     void handle_error() &;
     void handle_close() &;
 
 private:
+    void cancel_read(std::size_t id) &;
+    void cancel_write(std::size_t id) &;
+
     void set_result_impl(meta::maybe<result<std::uint32_t>>&& r);
 
 private:
     meta::maybe<state> state_{};
     sys::socket& sys_;
+    std::size_t current_id_ = 0;
 };
 
 } // namespace sl::io::state

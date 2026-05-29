@@ -18,17 +18,11 @@ struct server : meta::immovable {
 
     template <exec::SlotCtor<V, E> SlotCtorT>
     struct [[nodiscard]] accept_connection final : state::server::callback {
-        accept_connection(state::server& a_state, sys::epoll& an_epoll, SlotCtorT&& slot_ctor)
-            : slot_{ std::move(slot_ctor)() }, state_{ a_state }, epoll_{ an_epoll } {}
+        accept_connection(state::server& a_state, SlotCtorT&& slot_ctor)
+            : slot_{ std::move(slot_ctor)() }, state_{ a_state } {}
 
         // Connection
-        exec::CancelHandle auto emit() && noexcept {
-            state_.begin_accept(*this);
-            return exec::proxy_cancel_handle{ this };
-        }
-
-        // CancelHandle
-        constexpr void try_cancel() && noexcept { state_.cancel_accept(); }
+        exec::CancelHandle auto emit() && noexcept { return state_.begin_accept(*this); }
 
         // slot_callback
         void set_result(meta::maybe<meta::result<V, E>>&& maybe_result) && noexcept override {
@@ -38,7 +32,6 @@ struct server : meta::immovable {
     private:
         exec::SlotFrom<SlotCtorT> slot_;
         state::server& state_;
-        sys::epoll& epoll_;
     };
 
     struct [[nodiscard]] accept_signal {
@@ -46,18 +39,17 @@ struct server : meta::immovable {
         using error_type = E;
 
     public:
-        accept_signal(state::server& a_state, sys::epoll& an_epoll) : state_{ a_state }, epoll_{ an_epoll } {}
+        constexpr explicit accept_signal(state::server& a_state) : state_{ a_state } {}
 
         template <exec::SlotCtor<V, E> SlotCtorT>
         constexpr exec::Connection auto subscribe(SlotCtorT&& slot_ctor) && noexcept {
-            return accept_connection{ state_, epoll_, std::move(slot_ctor) };
+            return accept_connection{ state_, std::move(slot_ctor) };
         }
 
         static exec::executor& get_executor() noexcept { return exec::inline_executor(); }
 
     private:
         state::server& state_;
-        sys::epoll& epoll_;
     };
 
     struct [[nodiscard]] bound : meta::immovable {
@@ -70,7 +62,7 @@ struct server : meta::immovable {
         ~bound();
 
     public:
-        constexpr exec::Signal<V, E> auto accept() & { return accept_signal{ state_, epoll_ }; }
+        constexpr exec::Signal<V, E> auto accept() & { return accept_signal{ state_ }; }
 
         // expected to always be called in the end
         result<meta::unit> unbind() &&;

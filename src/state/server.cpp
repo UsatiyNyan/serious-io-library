@@ -8,10 +8,13 @@
 
 namespace sl::io::state {
 
-void server::begin_accept(callback& cb) & {
+server::cancel_handle server::begin_accept(callback& cb) & {
     DEBUG_ASSERT(!cb_.has_value());
     cb_ = cb;
     resume_accept();
+
+    ++current_id_;
+    return cancel_handle{ .self = *this, .id = current_id_ };
 }
 
 void server::resume_accept() & {
@@ -26,7 +29,10 @@ void server::resume_accept() & {
     std::move(cb).set_result(std::move(accept_result));
 }
 
-void server::cancel_accept() & {
+void server::cancel_accept(std::size_t id) & {
+    if (id != current_id_) {
+        return;
+    }
     std::exchange(cb_, meta::null) //
         .map([this](callback& cb) { std::move(cb).set_result(meta::null); });
 }
