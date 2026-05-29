@@ -14,7 +14,9 @@ namespace sl::io::state {
 socket::read_cancel_handle socket::begin_read(std::span<std::byte> buf, callback& cb) & {
     DEBUG_ASSERT(!state_.has_value());
     state_.emplace(buf, &cb);
-    resume_read();
+
+    // FIXME: to eagerly read need to solve callback lifetime
+    // resume_read();
 
     ++current_id_;
     return read_cancel_handle{
@@ -26,7 +28,9 @@ socket::read_cancel_handle socket::begin_read(std::span<std::byte> buf, callback
 socket::write_cancel_handle socket::begin_write(std::span<const std::byte> buf, callback& cb) & {
     DEBUG_ASSERT(!state_.has_value());
     state_.emplace(buf, &cb);
-    resume_write();
+
+    // FIXME: to eagerly write need to solve callback lifetime
+    // resume_write();
 
     ++current_id_;
     return write_cancel_handle{

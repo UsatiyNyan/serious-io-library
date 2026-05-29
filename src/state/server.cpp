@@ -11,7 +11,8 @@ namespace sl::io::state {
 server::cancel_handle server::begin_accept(callback& cb) & {
     DEBUG_ASSERT(!cb_.has_value());
     cb_ = cb;
-    resume_accept();
+    // FIXME: to eagerly accept need to solve callback lifetime
+    // resume_accept();
 
     ++current_id_;
     return cancel_handle{ .self = *this, .id = current_id_ };
