@@ -8,6 +8,36 @@
 
 namespace sl::io::sys {
 
+void epoll::callback::operator()(event_flag events) & {
+    if (state_.load(std::memory_order::acquire) == state_destroyed) {
+        delete this;
+        return;
+    }
+    DEBUG_ASSERT(state_.load(std::memory_order::relaxed) == state_deferred);
+    cb_(events);
+}
+
+void epoll::callback::try_destroy() & {
+    state expected = state_deferred;
+    if (state_.compare_exchange_strong(
+            expected, state_destroyed, std::memory_order::relaxed, std::memory_order::acquire
+        )) {
+        return;
+    }
+    DEBUG_ASSERT(expected == state_eager);
+    delete this;
+}
+
+void epoll::callback::eager() & {
+    DEBUG_ASSERT(state_.load(std::memory_order::relaxed) != state_destroyed);
+    state_.store(state_eager, std::memory_order::release);
+}
+
+void epoll::callback::defer() & {
+    DEBUG_ASSERT(state_.load(std::memory_order::relaxed) == state_eager);
+    state_.store(state_deferred, std::memory_order::release);
+}
+
 result<epoll> epoll::create() {
     const int epfd = epoll_create1(0);
     if (epfd == -1) {
@@ -24,10 +54,8 @@ result<meta::unit> epoll::ctl(op an_op, const file& a_file, ::epoll_event an_eve
     return meta::unit{};
 }
 
-result<meta::unit> epoll::ctl(op an_op, const file& a_file, event_flag subscribe_events, callback& a_callback) & {
-    return ctl(
-        an_op, a_file, ::epoll_event{ .events = subscribe_events.get_underlying(), .data{ .ptr = &a_callback } }
-    );
+result<meta::unit> epoll::ctl(op an_op, const file& a_file, event_flag subscribe_events, callback* a_callback) & {
+    return ctl(an_op, a_file, ::epoll_event{ .events = subscribe_events.get_underlying(), .data{ .ptr = a_callback } });
 }
 
 result<std::uint32_t>

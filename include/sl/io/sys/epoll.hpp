@@ -7,6 +7,7 @@
 #include "sl/io/result.hpp"
 #include "sl/io/sys/file.hpp"
 
+#include <sl/exec/thread/detail/atomic.hpp>
 #include <sl/meta/enum/flag.hpp>
 #include <sl/meta/func/function.hpp>
 #include <sl/meta/monad/maybe.hpp>
@@ -40,7 +41,30 @@ struct epoll {
     };
     using event_flag = meta::enum_flag<event>;
 
-    using callback = meta::unique_function<void(event_flag events)>;
+    struct callback {
+        enum state : std::uint32_t {
+            state_eager,
+            state_deferred,
+            state_destroyed,
+        };
+
+    public:
+        static callback* make(meta::unique_function<void(event_flag events)> cb) {
+            return new callback{ std::move(cb) };
+        }
+
+        void operator()(event_flag events) &;
+        void try_destroy() &;
+        void eager() &;
+        void defer() &;
+
+    private:
+        explicit callback(meta::unique_function<void(event_flag events)> cb) : cb_{ std::move(cb) } {}
+
+    private:
+        meta::unique_function<void(event_flag events)> cb_;
+        exec::detail::atomic<state> state_{ state_eager };
+    };
 
 private:
     explicit epoll(file handle) : handle_{ std::move(handle) } {}
@@ -50,7 +74,7 @@ public:
 
     [[nodiscard]] result<meta::unit> ctl(op an_op, const file& a_file, ::epoll_event an_event) &;
     [[nodiscard]] result<meta::unit>
-        ctl(op an_op, const file& a_file, event_flag subscribe_events, callback& a_callback) &;
+        ctl(op an_op, const file& a_file, event_flag subscribe_events, callback* a_callback) &;
     [[nodiscard]] result<std::uint32_t>
         wait(std::span<::epoll_event> out_events, meta::maybe<std::chrono::milliseconds> maybe_timeout) &;
 

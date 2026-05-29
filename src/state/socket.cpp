@@ -11,12 +11,10 @@
 
 namespace sl::io::state {
 
-socket::read_cancel_handle socket::begin_read(std::span<std::byte> buf, callback& cb) & {
+socket::read_cancel_handle socket::begin_read(std::span<std::byte> buf, callbacks cbs) & {
     DEBUG_ASSERT(!state_.has_value());
-    state_.emplace(buf, &cb);
-
-    // FIXME: to eagerly read need to solve callback lifetime
-    // resume_read();
+    state_.emplace(buf, std::move(cbs));
+    resume_read();
 
     ++current_id_;
     return read_cancel_handle{
@@ -25,12 +23,10 @@ socket::read_cancel_handle socket::begin_read(std::span<std::byte> buf, callback
     };
 }
 
-socket::write_cancel_handle socket::begin_write(std::span<const std::byte> buf, callback& cb) & {
+socket::write_cancel_handle socket::begin_write(std::span<const std::byte> buf, callbacks cbs) & {
     DEBUG_ASSERT(!state_.has_value());
-    state_.emplace(buf, &cb);
-
-    // FIXME: to eagerly write need to solve callback lifetime
-    // resume_write();
+    state_.emplace(buf, std::move(cbs));
+    resume_write();
 
     ++current_id_;
     return write_cancel_handle{
@@ -49,6 +45,7 @@ void socket::resume_read() & {
     }
     const auto result = sys_.get_file().read(*rb);
     if (check_reschedule(result)) {
+        state_->cbs.epoll->defer();
         return;
     }
     set_result_impl(std::move(result));
@@ -64,6 +61,7 @@ void socket::resume_write() & {
     }
     const auto result = sys_.get_file().write(*wb);
     if (check_reschedule(result)) {
+        state_->cbs.epoll->defer();
         return;
     }
     set_result_impl(std::move(result));
@@ -101,10 +99,13 @@ void socket::cancel_write(std::size_t id) & {
 }
 
 void socket::set_result_impl(meta::maybe<result<std::uint32_t>>&& r) {
+    if (r.has_value()) {
+        state_->cbs.epoll->eager();
+    }
     // gentle dance, reset before set_result
-    auto* cb = state_->cb;
+    auto* slot = state_->cbs.slot;
     state_.reset();
-    std::move(*cb).set_result(std::move(r));
+    std::move(*slot).set_result(std::move(r));
 }
 
 } // namespace sl::io::state

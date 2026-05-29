@@ -6,16 +6,15 @@
 
 #include <sl/exec/model/syntax.hpp>
 #include <sl/meta/assert.hpp>
-#include <utility>
 
 namespace sl::io::async {
 
-server::bound::~bound() { ASSERT(is_unbound_); }
+server::bound::~bound() noexcept { ASSERT(is_unbound_); }
 
 result<meta::unit> server::bound::unbind() && {
     ASSERT(!is_unbound_);
     return epoll_ //
-        .ctl(sys::epoll::op::del, state_.sys().get_socket().get_file(), ::epoll_event{})
+        .ctl(sys::epoll::op::del, self_.state_.sys().get_socket().get_file(), ::epoll_event{})
         .map([this](meta::unit) {
             is_unbound_ = true;
             return meta::unit{};
@@ -23,13 +22,13 @@ result<meta::unit> server::bound::unbind() && {
 }
 
 server::server(state::server& a_server)
-    : state_{ a_server }, callback_{ [this](sys::epoll::event_flag events) {
+    : state_{ a_server }, callback_{ sys::epoll::callback::make([this](sys::epoll::event_flag events) {
           if (events & sys::epoll::event::in) {
               state_.resume_accept();
           } else {
               std::unreachable();
           }
-      } } {}
+      }) } {}
 
 result<std::unique_ptr<server>> server::create(state::server& a_server) {
     return a_server //
@@ -45,7 +44,7 @@ result<server::bound> server::bind(sys::epoll& an_epoll) & {
                                       | sys::epoll::event::et;
     return an_epoll //
         .ctl(sys::epoll::op::add, state_.sys().get_socket().get_file(), subscribe_events, callback_)
-        .map([&](meta::unit) { return bound{ state_, an_epoll }; });
+        .map([&](meta::unit) { return bound{ *this, an_epoll }; });
 }
 
 } // namespace sl::io::async

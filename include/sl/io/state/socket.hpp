@@ -4,10 +4,10 @@
 
 #pragma once
 
+#include "sl/io/sys/epoll.hpp"
 #include "sl/io/sys/socket.hpp"
 
 #include <sl/exec/model/slot.hpp>
-#include <sl/meta/func/function.hpp>
 #include <sl/meta/monad/maybe.hpp>
 #include <sl/meta/traits/unique.hpp>
 
@@ -16,12 +16,17 @@
 namespace sl::io::state {
 
 struct socket {
-    using callback = exec::slot_callback<std::uint32_t, std::error_code>;
+    using slot_callback = exec::slot_callback<std::uint32_t, std::error_code>;
+    struct callbacks {
+        sys::epoll::callback* epoll;
+        slot_callback* slot;
+    };
+
     using read_buf = std::span<std::byte>;
     using write_buf = std::span<const std::byte>;
     struct state {
         std::variant<read_buf, write_buf> buf;
-        callback* cb;
+        callbacks cbs;
     };
 
     struct read_cancel_handle {
@@ -48,8 +53,8 @@ public:
     const sys::socket& sys() const& { return sys_; }
     sys::socket& sys() & { return sys_; }
 
-    read_cancel_handle begin_read(std::span<std::byte> buf, callback& cb) &;
-    write_cancel_handle begin_write(std::span<const std::byte> buf, callback& cb) &;
+    read_cancel_handle begin_read(std::span<std::byte> buf, callbacks cbs) &;
+    write_cancel_handle begin_write(std::span<const std::byte> buf, callbacks cbs) &;
 
     void resume_read() &;
     void resume_write() &;

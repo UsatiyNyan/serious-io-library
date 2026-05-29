@@ -9,12 +9,12 @@
 
 namespace sl::io::async {
 
-socket::bound::~bound() { ASSERT(is_unbound_); }
+socket::bound::~bound() noexcept { ASSERT(is_unbound_); }
 
 result<meta::unit> socket::bound::unbind() && {
     ASSERT(!is_unbound_);
     return epoll_ //
-        .ctl(sys::epoll::op::del, state_.sys().get_file(), ::epoll_event{})
+        .ctl(sys::epoll::op::del, self_.state_.sys().get_file(), ::epoll_event{})
         .map([this](meta::unit) {
             is_unbound_ = true;
             return meta::unit{};
@@ -22,7 +22,7 @@ result<meta::unit> socket::bound::unbind() && {
 }
 
 socket::socket(state::socket& a_socket)
-    : state_{ a_socket }, callback_{ [this](sys::epoll::event_flag events) {
+    : state_{ a_socket }, callback_{ sys::epoll::callback::make([this](sys::epoll::event_flag events) {
           if (events & sys::epoll::event::err) {
               state_.handle_error();
           } else if ((events & sys::epoll::event::rdhup) || (events & sys::epoll::event::hup)) {
@@ -34,7 +34,7 @@ socket::socket(state::socket& a_socket)
           } else {
               std::unreachable();
           }
-      } } {}
+      }) } {}
 
 result<std::unique_ptr<socket>> socket::create(state::socket& a_socket) {
     return a_socket //
@@ -53,7 +53,7 @@ result<socket::bound> socket::bind(sys::epoll& an_epoll) & {
                                       | sys::epoll::event::et;
     return an_epoll //
         .ctl(sys::epoll::op::add, state_.sys().get_file(), subscribe_events, callback_)
-        .map([&](meta::unit) { return bound{ state_, an_epoll }; });
+        .map([&](meta::unit) { return bound{ *this, an_epoll }; });
 }
 
 } // namespace sl::io::async
