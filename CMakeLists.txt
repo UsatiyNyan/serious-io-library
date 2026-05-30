@@ -14,7 +14,7 @@ sl_project_prologue(
 
 project(
         serious-io-library
-        VERSION 1.1.0
+        VERSION 2.0.0
         DESCRIPTION "async sockets, epoll exclusively for linux for now"
         HOMEPAGE_URL "TODO"
         LANGUAGES CXX)
@@ -23,8 +23,6 @@ add_library(${PROJECT_NAME} STATIC
     src/sys/file.cpp
     src/sys/epoll.cpp
     src/sys/socket.cpp
-    src/state/socket.cpp
-    src/state/server.cpp
     src/async/socket.cpp
     src/async/server.cpp
 )

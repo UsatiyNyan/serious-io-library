@@ -20,18 +20,13 @@ exec::async<void> client_coro(
     using exec::operator|;
 
     auto& [socket, address] = accepted;
-    io::state::socket socket_state{ socket };
-    auto socket_async = *io::async::socket::create(socket_state);
-    auto bound_socket_async = *socket_async->bind(epoll);
-    meta::defer unbind_socket{ [&bound_socket_async] { ASSERT(std::move(bound_socket_async).unbind()); } };
-
-    auto& client = bound_socket_async;
+    auto socket_async = *io::async::socket::create(socket, epoll);
 
     fmt::println("started");
     while (true) {
         std::array<std::byte, 1024> buffer{};
 
-        const auto read_result = co_await (client.read(buffer) | exec::continue_on(executor));
+        const auto read_result = co_await (socket_async->read(buffer) | exec::continue_on(executor));
         if (!read_result.has_value() || *read_result == 0) {
             break;
         }
@@ -39,7 +34,7 @@ exec::async<void> client_coro(
         fmt::println("read {} bytes:\n{}", *read_result, read_str.data());
 
         const auto write_result =
-            co_await (client.write(std::span{ buffer.data(), *read_result }) | exec::continue_on(executor));
+            co_await (socket_async->write(std::span{ buffer.data(), *read_result }) | exec::continue_on(executor));
         if (!write_result.has_value() || *write_result == 0) {
             break;
         }
@@ -48,15 +43,14 @@ exec::async<void> client_coro(
     fmt::println("ended");
 }
 
-exec::async<void> serve_coro(io::async::server::bound server, io::sys::epoll& epoll, exec::executor& executor) {
+exec::async<void>
+    serve_coro(std::unique_ptr<io::async::server> async_server, io::sys::epoll& epoll, exec::executor& executor) {
     using exec::operator co_await;
-
-    meta::defer unbind_server{ [&server] { ASSERT(std::move(server).unbind()); } };
 
     fmt::println("serve started");
 
     while (true) {
-        auto accept_result = co_await server.accept();
+        auto accept_result = co_await async_server->accept();
         ASSERT(accept_result);
         fmt::println("accept");
 
@@ -65,20 +59,17 @@ exec::async<void> serve_coro(io::async::server::bound server, io::sys::epoll& ep
 }
 
 void main(std::uint16_t port, std::uint16_t max_clients) {
+    auto epoll = *ASSERT_VAL(io::sys::epoll::create());
+
     auto socket = *ASSERT_VAL(io::sys::socket::create(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0));
     ASSERT(socket.set_opt(SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, 1));
     const auto address = io::sys::make_ipv4_address(AF_INET, port, INADDR_ANY);
     auto bound_server = *ASSERT_VAL(std::move(socket).bind(address));
     auto server = *ASSERT_VAL(std::move(bound_server).listen(max_clients));
-
-    io::state::server server_state{ server };
-    auto server_async = *ASSERT_VAL(io::async::server::create(server_state));
-
-    auto epoll = *ASSERT_VAL(io::sys::epoll::create());
-    auto bound_server_async = *ASSERT_VAL(server_async->bind(epoll));
+    auto server_async = *ASSERT_VAL(io::async::server::create(server, epoll));
 
     exec::manual_executor executor;
-    exec::coro_schedule(executor, serve_coro(std::move(bound_server_async), epoll, executor));
+    exec::coro_schedule(executor, serve_coro(std::move(server_async), epoll, executor));
 
     std::array<::epoll_event, 1024> events{};
     do {
